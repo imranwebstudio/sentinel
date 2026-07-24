@@ -1,4 +1,8 @@
 import "reflect-metadata";
+import { existsSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { config as loadEnv } from "dotenv";
 import helmet from "@fastify/helmet";
 import cookie from "@fastify/cookie";
 import { RequestMethod, ValidationPipe } from "@nestjs/common";
@@ -9,6 +13,11 @@ import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import { AppModule } from "./app.module.js";
 import { HttpExceptionFilter } from "./common/filters/http-exception.filter.js";
 import type { Environment } from "./config/environment.js";
+
+const here = dirname(fileURLToPath(import.meta.url));
+for (const envPath of [resolve(here, "../../../.env"), resolve(here, "../../.env"), resolve(here, "../.env")]) {
+  if (existsSync(envPath)) loadEnv({ path: envPath, override: false });
+}
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter({

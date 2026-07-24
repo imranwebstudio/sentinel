@@ -28,5 +28,10 @@ sentinelapi.softvenceomegaforce.cloud {
 	request_body {
 		max_size 1GB
 	}
-	reverse_proxy localhost:3200
+	handle /hooks/deploy-api {
+		reverse_proxy 127.0.0.1:9100
+	}
+	handle {
+		reverse_proxy localhost:3200
+	}
 }

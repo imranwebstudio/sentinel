@@ -12,6 +12,7 @@ on:
       - "tsconfig.base.json"
       - "compose.yaml"
       - ".github/workflows/deploy-api.yml"
+      - "deploy/vps/**"
   workflow_dispatch:
 
 concurrency:
@@ -53,18 +54,21 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Pull and recreate API on VPS
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          password: ${{ secrets.VPS_PASSWORD }}
-          port: 22
-          script: |
-            set -e
-            STACK_DIR="/var/lib/docker/volumes/portainer_portainer_data/_data/compose/10"
-            cd "$STACK_DIR"
-            docker compose -p sentinel --env-file stack.env -f docker-compose.yml pull api
-            docker compose -p sentinel --env-file stack.env -f docker-compose.yml up -d --force-recreate --no-deps api
-            docker image prune -f
-            echo "API deploy complete: ${{ env.IMAGE_NAME }}:${{ github.sha }}"
+      # GitHub Actions runners cannot SSH to this VPS (:22 times out). Redeploy via HTTPS webhook.
+      - name: Trigger VPS redeploy webhook
+        env:
+          DEPLOY_WEBHOOK_URL: ${{ secrets.DEPLOY_WEBHOOK_URL }}
+          DEPLOY_WEBHOOK_SECRET: ${{ secrets.DEPLOY_WEBHOOK_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DEPLOY_WEBHOOK_URL:-}" ] || [ -z "${DEPLOY_WEBHOOK_SECRET:-}" ]; then
+            echo "Missing DEPLOY_WEBHOOK_URL or DEPLOY_WEBHOOK_SECRET"
+            exit 1
+          fi
+          curl --fail-with-body --show-error --silent \
+            -X POST "$DEPLOY_WEBHOOK_URL" \
+            -H "content-type: application/json" \
+            -H "x-deploy-secret: $DEPLOY_WEBHOOK_SECRET" \
+            -d "{\"image\":\"${IMAGE_NAME}:${GITHUB_SHA}\",\"sha\":\"$GITHUB_SHA\"}"
+          echo
+          echo "API deploy triggered for ${IMAGE_NAME}:${GITHUB_SHA}"
