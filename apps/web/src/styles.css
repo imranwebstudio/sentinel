@@ -91,5 +91,4 @@ button { cursor: pointer; }
 .scan-mode-toggle button.active { color: #052016; background: #34d399; }
 .scan-mode-toggle button:disabled { opacity: .55; cursor: not-allowed; }
 
-@media (min-width: 1024px) { .sidebar { transform: translateX(0); } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; } }
