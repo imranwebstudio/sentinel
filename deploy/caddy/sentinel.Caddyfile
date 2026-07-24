@@ -1,0 +1,32 @@
+# Append these blocks to /etc/caddy/Caddyfile on the VPS, then:
+#   caddy validate --config /etc/caddy/Caddyfile && systemctl reload caddy
+#
+# DNS A records (both → VPS IP):
+#   sentinel.softvenceomegaforce.cloud
+#   sentinelapi.softvenceomegaforce.cloud
+#
+# API container env should include:
+#   WEB_ORIGIN=https://sentinel.softvenceomegaforce.cloud
+#   APP_BASE_URL=https://sentinelapi.softvenceomegaforce.cloud
+#   API_PUBLIC_URL=https://sentinelapi.softvenceomegaforce.cloud
+# GitHub OAuth callback:
+#   https://sentinelapi.softvenceomegaforce.cloud/api/v1/github/oauth/callback
+
+sentinel.softvenceomegaforce.cloud {
+	root * /var/www/sentinel
+	encode gzip
+	handle /api/* {
+		reverse_proxy localhost:3200
+	}
+	handle {
+		try_files {path} /index.html
+		file_server
+	}
+}
+
+sentinelapi.softvenceomegaforce.cloud {
+	request_body {
+		max_size 1GB
+	}
+	reverse_proxy localhost:3200
+}
