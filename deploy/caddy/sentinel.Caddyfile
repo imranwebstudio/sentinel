@@ -5,12 +5,12 @@
 #   sentinel.softvenceomegaforce.cloud
 #   sentinelapi.softvenceomegaforce.cloud
 #
-# API container env should include:
+# API container env should include (OAuth start+callback must share one browser host):
 #   WEB_ORIGIN=https://sentinel.softvenceomegaforce.cloud
-#   APP_BASE_URL=https://sentinelapi.softvenceomegaforce.cloud
-#   API_PUBLIC_URL=https://sentinelapi.softvenceomegaforce.cloud
-# GitHub OAuth callback:
-#   https://sentinelapi.softvenceomegaforce.cloud/api/v1/github/oauth/callback
+#   APP_BASE_URL=https://sentinel.softvenceomegaforce.cloud
+#   API_PUBLIC_URL=https://sentinel.softvenceomegaforce.cloud
+# GitHub OAuth callback (Authorization callback URL):
+#   https://sentinel.softvenceomegaforce.cloud/api/v1/github/oauth/callback
 
 sentinel.softvenceomegaforce.cloud {
 	root * /var/www/sentinel

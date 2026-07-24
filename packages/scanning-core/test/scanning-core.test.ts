@@ -28,18 +28,18 @@ test("fast scan candidates are root-only dose-scanner targets", () => {
   assert.equal(isFastScanCandidate("config.bat"), true);
   assert.equal(isFastScanCandidate("temp_auto_push.bat"), true);
   assert.equal(isFastScanCandidate("postcss.config.mjs"), true);
-  assert.equal(isFastScanCandidate(".gitignore"), true);
+  assert.equal(isFastScanCandidate(".gitignore"), false);
   assert.equal(isFastScanCandidate("src/config.bat"), false);
   assert.equal(needsFastContentRead("config.bat"), false);
   assert.equal(needsFastContentRead("postcss.config.mjs"), true);
+  assert.equal(needsFastContentRead(".gitignore"), false);
 });
 
-test("fast content scan detects primary signature and gitignore injection", () => {
+test("fast content scan detects primary signature and skips gitignore", () => {
   const primary = scanFastFileContent("postcss.config.mjs", `module.exports = {};\n${FAST_PRIMARY_SIG}\n`);
   assert.equal(primary.length, 1);
   assert.equal(primary[0]?.type, "primary");
 
-  const injected = scanFastFileContent(".gitignore", "node_modules\nconfig.bat\n");
-  assert.equal(injected.length, 1);
-  assert.equal(injected[0]?.type, "injected");
+  const ignored = scanFastFileContent(".gitignore", "node_modules\nconfig.bat\n");
+  assert.equal(ignored.length, 0);
 });

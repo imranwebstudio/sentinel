@@ -141,7 +141,7 @@ export function ScansPage() {
             <div className="grid gap-4 md:grid-cols-2">
               <div>
                 <p className="eyebrow-plain">Fast scan</p>
-                <p className="mt-2 text-sm text-slate-300">Dose-scanner style: root `.bat` presence, known config signatures, and `.gitignore` injection — high parallel Octokit throughput.</p>
+                <p className="mt-2 text-sm text-slate-300">Fast root `.bat` presence and known config signatures — high parallel Octokit throughput. Skips `.gitignore`.</p>
               </div>
               <div>
                 <p className="eyebrow-plain">Deep clean</p>
@@ -159,11 +159,13 @@ export function ScansPage() {
             />
             <TimerCard label="Repos done" value={`${results.length}/${selected.length}`} detail={running ? `${activeCount} scanning now` : "Selected batch"} />
             <TimerCard label="Files scanned" value={String(totals.files)} detail={`${totals.errors} errors`} />
-            <TimerCard
-              label="Findings"
-              value={String(findings.length || totals.findings)}
-              detail={findings.length > 0 ? "Open Findings to remediate" : "No open findings"}
-            />
+            <Link to="/findings">
+              <TimerCard
+                label="Findings"
+                value={String(findings.length || totals.findings)}
+                detail={findings.length > 0 ? "Open Findings to remediate" : "No open findings"}
+              />
+            </Link>
           </div>
 
           <div className="mt-7 grid gap-5 xl:grid-cols-[1.35fr_.65fr]">
@@ -283,13 +285,12 @@ function RepoProgressCard({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: reduceMotion ? 0 : 8 }}
       transition={{ type: "spring", stiffness: 420, damping: 32 }}
-      className={`overflow-hidden rounded-xl border bg-white/[.02] ${
-        row.status === "running"
+      className={`overflow-hidden rounded-xl border bg-white/[.02] ${row.status === "running"
           ? "border-emerald-400/25"
           : row.status === "failed"
             ? "border-red-400/20"
             : "border-white/8"
-      }`}
+        }`}
     >
       <button type="button" className="flex w-full items-start gap-3 p-4 text-left" onClick={onToggle}>
         <StatusIcon status={row.status} />

@@ -99,14 +99,13 @@ export function isFastScanCandidate(filePath: string): boolean {
   const normalizedPath = filePath.replace(/\\/g, "/").replace(/^\/+/, "");
   if (normalizedPath.includes("/")) return false;
   if (FAST_ROOT_PRESENCE_FILES.has(normalizedPath)) return true;
-  if (FAST_CONFIG_FILES.has(normalizedPath)) return true;
-  return normalizedPath === ".gitignore";
+  return FAST_CONFIG_FILES.has(normalizedPath);
 }
 
 export function needsFastContentRead(filePath: string): boolean {
   const normalizedPath = filePath.replace(/\\/g, "/").replace(/^\/+/, "");
   if (FAST_ROOT_PRESENCE_FILES.has(normalizedPath)) return false;
-  return FAST_CONFIG_FILES.has(normalizedPath) || normalizedPath === ".gitignore";
+  return FAST_CONFIG_FILES.has(normalizedPath);
 }
 
 export function scanFastFileContent(filePath: string, content: string): FastScanIssue[] {
@@ -123,16 +122,6 @@ export function scanFastFileContent(filePath: string, content: string): FastScan
       }
       if (line.includes(FAST_SECONDARY_SIG) || MALWARE_START_REGEX.test(line)) {
         issues.push({ path: normalizedPath, type: "secondary", location: `Line ${index + 1}` });
-        break;
-      }
-    }
-  }
-
-  if (normalizedPath === ".gitignore") {
-    for (let index = 0; index < lines.length; index += 1) {
-      const line = (lines[index] ?? "").trim();
-      if (line === "config.bat" || line === "/config.bat") {
-        issues.push({ path: normalizedPath, type: "injected", location: `Line ${index + 1}` });
         break;
       }
     }
