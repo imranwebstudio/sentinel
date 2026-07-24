@@ -1,0 +1,13 @@
+node_modules/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+.turbo/
+.vite/
+.DS_Store
+apps/api/src/generated/prisma/
+postgres-data/
+redis-data/
+*.log

@@ -1,0 +1,450 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../apps/api/src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DISABLED
+}
+
+enum TeamRole {
+  OWNER
+  ADMIN
+  OPERATOR
+  ANALYST
+  VIEWER
+  BILLING
+}
+
+enum MembershipStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+}
+
+enum ProjectStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum ScanMode {
+  FULL
+  INCREMENTAL
+}
+
+enum ScanStatus {
+  REQUESTED
+  QUEUED
+  DISCOVERING
+  SCANNING
+  AGGREGATING
+  PAUSING
+  PAUSED
+  CANCELLING
+  CANCELLED
+  COMPLETED
+  FAILED
+}
+
+enum JobStatus {
+  WAITING
+  ACTIVE
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum FindingStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+  SUPPRESSED
+  FALSE_POSITIVE
+}
+
+enum Severity {
+  INFO
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model User {
+  id          String   @id @default(uuid()) @db.Uuid
+  email       String   @unique
+  displayName String?  @map("display_name")
+  avatarUrl   String?  @map("avatar_url")
+  status      UserStatus @default(ACTIVE)
+  lastLoginAt DateTime? @map("last_login_at") @db.Timestamptz
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+  memberships TeamMember[]
+  identities  AuthIdentity[]
+  createdScans Scan[] @relation("ScanCreator")
+  scanHistories ScanHistory[]
+  @@map("users")
+}
+
+model AuthIdentity {
+  id              String @id @default(uuid()) @db.Uuid
+  userId          String @map("user_id") @db.Uuid
+  provider        String
+  providerSubject String @map("provider_subject")
+  scopes          String[]
+  expiresAt       DateTime? @map("expires_at") @db.Timestamptz
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([provider, providerSubject])
+  @@index([userId])
+  @@map("auth_identities")
+}
+
+model Team {
+  id        String @id @default(uuid()) @db.Uuid
+  name      String
+  slug      String @unique
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz
+  members TeamMember[]
+  projects Project[]
+  installations ProviderInstallation[]
+  scans Scan[]
+  auditLogs AuditLog[]
+  @@map("teams")
+}
+
+model TeamMember {
+  teamId String @map("team_id") @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  role TeamRole
+  status MembershipStatus @default(ACTIVE)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@id([teamId, userId])
+  @@index([userId])
+  @@map("team_members")
+}
+
+model ProviderInstallation {
+  id String @id @default(uuid()) @db.Uuid
+  teamId String @map("team_id") @db.Uuid
+  provider String
+  externalId String @map("external_id")
+  accountLogin String @map("account_login")
+  status String @default("ACTIVE")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  repositories Repository[]
+  @@unique([provider, externalId])
+  @@index([teamId])
+  @@map("provider_installations")
+}
+
+model Repository {
+  id String @id @default(uuid()) @db.Uuid
+  installationId String @map("installation_id") @db.Uuid
+  externalId String @map("external_id")
+  owner String
+  name String
+  fullName String @map("full_name")
+  defaultBranch String @map("default_branch")
+  visibility String
+  archived Boolean @default(false)
+  permissions Json @default("{}")
+  pushedAt DateTime? @map("pushed_at") @db.Timestamptz
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  installation ProviderInstallation @relation(fields: [installationId], references: [id], onDelete: Cascade)
+  projects ProjectRepository[]
+  targets ScanTarget[]
+  @@unique([installationId, externalId])
+  @@index([installationId, fullName])
+  @@map("repositories")
+}
+
+model Project {
+  id String @id @default(uuid()) @db.Uuid
+  teamId String @map("team_id") @db.Uuid
+  name String
+  slug String
+  status ProjectStatus @default(ACTIVE)
+  settings Json @default("{}")
+  retentionDays Int @default(365) @map("retention_days")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  repositories ProjectRepository[]
+  scans Scan[]
+  @@unique([teamId, slug])
+  @@index([teamId, createdAt(sort: Desc)])
+  @@map("projects")
+}
+
+model ProjectRepository {
+  projectId String @map("project_id") @db.Uuid
+  repositoryId String @map("repository_id") @db.Uuid
+  enabled Boolean @default(true)
+  branchPatterns String[] @map("branch_patterns")
+  scanPolicy Json @default("{}") @map("scan_policy")
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  repository Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  @@id([projectId, repositoryId])
+  @@index([repositoryId])
+  @@map("project_repositories")
+}
+
+model Scan {
+  id String @id @default(uuid()) @db.Uuid
+  teamId String @map("team_id") @db.Uuid
+  projectId String @map("project_id") @db.Uuid
+  createdById String @map("created_by_id") @db.Uuid
+  mode ScanMode
+  status ScanStatus @default(REQUESTED)
+  priority Int @default(50)
+  configuration Json @default("{}")
+  ruleSetChecksum String @map("rule_set_checksum")
+  discovered Int @default(0)
+  waiting Int @default(0)
+  active Int @default(0)
+  completed Int @default(0)
+  failed Int @default(0)
+  retried Int @default(0)
+  skipped Int @default(0)
+  progressBasisPoints Int @default(0) @map("progress_basis_points")
+  version Int @default(0)
+  requestedAt DateTime @default(now()) @map("requested_at") @db.Timestamptz
+  startedAt DateTime? @map("started_at") @db.Timestamptz
+  completedAt DateTime? @map("completed_at") @db.Timestamptz
+  cancelledAt DateTime? @map("cancelled_at") @db.Timestamptz
+  team Team @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  createdBy User @relation("ScanCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  targets ScanTarget[]
+  jobs ScanJob[]
+  findings Finding[]
+  events ScanEvent[]
+  @@index([teamId, requestedAt(sort: Desc)])
+  @@index([projectId, status, requestedAt(sort: Desc)])
+  @@map("scans")
+}
+
+model ScanTarget {
+  id String @id @default(uuid()) @db.Uuid
+  scanId String @map("scan_id") @db.Uuid
+  repositoryId String @map("repository_id") @db.Uuid
+  branch String
+  headSha String? @map("head_sha")
+  treeSha String? @map("tree_sha")
+  previousSha String? @map("previous_sha")
+  status ScanStatus @default(REQUESTED)
+  scan Scan @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  repository Repository @relation(fields: [repositoryId], references: [id], onDelete: Restrict)
+  files ScanFile[]
+  jobs ScanJob[]
+  @@unique([scanId, repositoryId, branch])
+  @@index([repositoryId, branch])
+  @@map("scan_targets")
+}
+
+model ScanJob {
+  id String @id @default(uuid()) @db.Uuid
+  scanId String @map("scan_id") @db.Uuid
+  scanTargetId String? @map("scan_target_id") @db.Uuid
+  queue String
+  kind String
+  jobKey String @map("job_key")
+  status JobStatus @default(WAITING)
+  priority Int @default(50)
+  attempt Int @default(0)
+  maxAttempts Int @default(5) @map("max_attempts")
+  workerId String? @map("worker_id")
+  errorCode String? @map("error_code")
+  errorMessage String? @map("error_message")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  startedAt DateTime? @map("started_at") @db.Timestamptz
+  completedAt DateTime? @map("completed_at") @db.Timestamptz
+  scan Scan @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  target ScanTarget? @relation(fields: [scanTargetId], references: [id], onDelete: Cascade)
+  @@unique([scanId, jobKey])
+  @@index([scanId, status])
+  @@map("scan_jobs")
+}
+
+model ScanFile {
+  id String @id @default(uuid()) @db.Uuid
+  scanTargetId String @map("scan_target_id") @db.Uuid
+  path String
+  blobSha String @map("blob_sha")
+  size Int?
+  mediaType String? @map("media_type")
+  disposition String
+  ruleSetChecksum String @map("rule_set_checksum")
+  analyzedAt DateTime? @map("analyzed_at") @db.Timestamptz
+  target ScanTarget @relation(fields: [scanTargetId], references: [id], onDelete: Cascade)
+  findings Finding[]
+  @@unique([scanTargetId, path])
+  @@index([blobSha, ruleSetChecksum])
+  @@map("scan_files")
+}
+
+model Finding {
+  id String @id @default(uuid()) @db.Uuid
+  scanId String @map("scan_id") @db.Uuid
+  scanFileId String @map("scan_file_id") @db.Uuid
+  fingerprint String
+  ruleKey String @map("rule_key")
+  severity Severity
+  category String
+  status FindingStatus @default(OPEN)
+  title String
+  summary String
+  evidence Json @default("{}")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  scan Scan @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  file ScanFile @relation(fields: [scanFileId], references: [id], onDelete: Cascade)
+  @@unique([scanId, fingerprint])
+  @@index([scanId, status, severity])
+  @@map("findings")
+}
+
+model ScanEvent {
+  id BigInt @id @default(autoincrement())
+  scanId String @map("scan_id") @db.Uuid
+  sequence Int
+  type String
+  payload Json @default("{}")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  scan Scan @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  @@unique([scanId, sequence])
+  @@index([scanId, createdAt])
+  @@map("scan_events")
+}
+
+model AuditLog {
+  id BigInt @id @default(autoincrement())
+  teamId String @map("team_id") @db.Uuid
+  actorUserId String? @map("actor_user_id") @db.Uuid
+  action String
+  resourceType String @map("resource_type")
+  resourceId String? @map("resource_id")
+  outcome String
+  correlationId String? @map("correlation_id")
+  metadata Json @default("{}")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  team Team @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  @@index([teamId, createdAt(sort: Desc)])
+  @@map("audit_logs")
+}
+
+model OutboxEvent {
+  id BigInt @id @default(autoincrement())
+  aggregateType String @map("aggregate_type")
+  aggregateId String @map("aggregate_id")
+  type String
+  payload Json
+  attempts Int @default(0)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  publishedAt DateTime? @map("published_at") @db.Timestamptz
+  @@index([publishedAt, createdAt])
+  @@map("outbox_events")
+}
+
+enum RuntimeScanMode {
+  FAST
+  DEEP
+}
+
+enum RuntimeScanStatus {
+  COMPLETED
+  PARTIAL
+  FAILED
+  CANCELLED
+}
+
+enum HistoryFindingStatus {
+  OPEN
+  REMEDIATED
+}
+
+/// Durable per-user scan history for the current OAuth/app scan flow.
+model ScanHistory {
+  id                String            @id @default(uuid()) @db.Uuid
+  userId            String            @map("user_id") @db.Uuid
+  githubLogin       String            @map("github_login")
+  mode              RuntimeScanMode
+  status            RuntimeScanStatus
+  repositoryCount   Int               @map("repository_count")
+  completedCount    Int               @default(0) @map("completed_count")
+  failedCount       Int               @default(0) @map("failed_count")
+  findingsCount     Int               @default(0) @map("findings_count")
+  openFindingsCount Int               @default(0) @map("open_findings_count")
+  filesScanned      Int               @default(0) @map("files_scanned")
+  durationMs        Int?              @map("duration_ms")
+  startedAt         DateTime          @map("started_at") @db.Timestamptz
+  completedAt       DateTime?         @map("completed_at") @db.Timestamptz
+  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  repositories      ScanHistoryRepository[]
+  findings          ScanHistoryFinding[]
+
+  @@index([userId, startedAt(sort: Desc)])
+  @@index([githubLogin, startedAt(sort: Desc)])
+  @@map("scan_histories")
+}
+
+model ScanHistoryRepository {
+  id             String      @id @default(uuid()) @db.Uuid
+  scanHistoryId  String      @map("scan_history_id") @db.Uuid
+  fullName       String      @map("full_name")
+  branch         String
+  status         String
+  scanned        Int         @default(0)
+  skipped        Int         @default(0)
+  findingsCount  Int         @default(0) @map("findings_count")
+  errorCount     Int         @default(0) @map("error_count")
+  durationMs     Int?        @map("duration_ms")
+  truncated      Boolean     @default(false)
+  result         Json        @default("{}")
+  scanHistory    ScanHistory @relation(fields: [scanHistoryId], references: [id], onDelete: Cascade)
+
+  @@index([scanHistoryId])
+  @@index([fullName])
+  @@map("scan_history_repositories")
+}
+
+model ScanHistoryFinding {
+  id            String               @id @default(uuid()) @db.Uuid
+  scanHistoryId String               @map("scan_history_id") @db.Uuid
+  externalId    String               @map("external_id")
+  repository    String
+  branch        String
+  path          String
+  action        String
+  snippets      Int                  @default(0)
+  blobSha       String               @map("blob_sha")
+  htmlUrl       String               @map("html_url")
+  status        HistoryFindingStatus @default(OPEN)
+  createdAt     DateTime             @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime             @updatedAt @map("updated_at") @db.Timestamptz
+  scanHistory   ScanHistory          @relation(fields: [scanHistoryId], references: [id], onDelete: Cascade)
+
+  @@unique([scanHistoryId, externalId])
+  @@index([scanHistoryId, status])
+  @@index([repository, status])
+  @@map("scan_history_findings")
+}
