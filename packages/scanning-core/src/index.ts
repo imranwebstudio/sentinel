@@ -4,10 +4,14 @@ export const MALWARE_SNIPPET_REGEX =
   /var\s+_\$_1e42\s*=\s*\(\s*function\s*\(\s*l\s*,\s*e\s*\)\s*\{[\s\S]*?\}\s*\)\s*(?:\([^;]*\)\s*)?;\s*/g;
 export const MALWARE_RESIDUAL_TAIL_REGEX =
   /\s*global\s*\[[\s\S]*?_\$_1e42[\s\S]*$/;
+export const MALWARE_ESLINT_BOOTSTRAP_REGEX =
+  /global\.i="[^"]+",global\.require=require;global\.module=module;global\.r=require;global\.m=module;[\s\S]*$/;
 
 /** Dose-scanner style primary/secondary string signatures for fast config scans. */
 export const FAST_PRIMARY_SIG = '("rmcej%otb%",2857687)';
 export const FAST_SECONDARY_SIG = "global['!']='8-270-2';var _$_1e42=";
+export const FAST_ESLINT_BOOTSTRAP_SIG =
+  'global.require=require;global.module=module;global.r=require;global.m=module;';
 
 /** Exact root filenames that are treated as malware by presence alone (no content download). */
 export const FAST_ROOT_PRESENCE_FILES = new Set([
@@ -67,7 +71,11 @@ export type FastScanIssue = {
 };
 
 export function removeMalware(content: string): MalwareRemovalResult {
-  if (!MALWARE_START_REGEX.test(content) && !MALWARE_RESIDUAL_TAIL_REGEX.test(content)) {
+  if (
+    !MALWARE_START_REGEX.test(content) &&
+    !MALWARE_RESIDUAL_TAIL_REGEX.test(content) &&
+    !MALWARE_ESLINT_BOOTSTRAP_REGEX.test(content)
+  ) {
     return { changed: false, cleaned: content, matchCount: 0 };
   }
 
@@ -77,6 +85,10 @@ export function removeMalware(content: string): MalwareRemovalResult {
     return "";
   });
   cleaned = cleaned.replace(MALWARE_RESIDUAL_TAIL_REGEX, () => {
+    matchCount += 1;
+    return "";
+  });
+  cleaned = cleaned.replace(MALWARE_ESLINT_BOOTSTRAP_REGEX, () => {
     matchCount += 1;
     return "";
   });
@@ -120,8 +132,16 @@ export function scanFastFileContent(filePath: string, content: string): FastScan
         issues.push({ path: normalizedPath, type: "primary", location: `Line ${index + 1}` });
         break;
       }
-      if (line.includes(FAST_SECONDARY_SIG) || MALWARE_START_REGEX.test(line)) {
-        issues.push({ path: normalizedPath, type: "secondary", location: `Line ${index + 1}` });
+      if (
+        line.includes(FAST_ESLINT_BOOTSTRAP_SIG) ||
+        line.includes(FAST_SECONDARY_SIG) ||
+        MALWARE_START_REGEX.test(line)
+      ) {
+        issues.push({
+          path: normalizedPath,
+          type: line.includes(FAST_ESLINT_BOOTSTRAP_SIG) ? "injected" : "secondary",
+          location: `Line ${index + 1}`,
+        });
         break;
       }
     }
@@ -159,7 +179,11 @@ export function cleanInfectedContent(filePath: string, content: string): Malware
     const next = cleaned
       .split(/\r?\n/)
       .filter((line) => {
-        if (line.includes(FAST_PRIMARY_SIG) || line.includes(FAST_SECONDARY_SIG)) {
+        if (
+          line.includes(FAST_PRIMARY_SIG) ||
+          line.includes(FAST_SECONDARY_SIG) ||
+          line.includes(FAST_ESLINT_BOOTSTRAP_SIG)
+        ) {
           matchCount += 1;
           return false;
         }

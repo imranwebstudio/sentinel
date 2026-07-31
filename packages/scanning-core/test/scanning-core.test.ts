@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  FAST_ESLINT_BOOTSTRAP_SIG,
   FAST_PRIMARY_SIG,
   isFastScanCandidate,
   isRepositoryMetadataFile,
@@ -42,4 +43,23 @@ test("fast content scan detects primary signature and skips gitignore", () => {
 
   const ignored = scanFastFileContent(".gitignore", "node_modules\nconfig.bat\n");
   assert.equal(ignored.length, 0);
+});
+
+test("fast content scan detects injected eslint bootstrap payloads", () => {
+  const issue = scanFastFileContent(
+    "eslint.config.mjs",
+    `export default {};\n${FAST_ESLINT_BOOTSTRAP_SIG}var obfuscated = 1;\n`,
+  );
+
+  assert.equal(issue.length, 1);
+  assert.equal(issue[0]?.type, "injected");
+});
+
+test("removes injected eslint bootstrap payloads", () => {
+  const input = `export default {};\nglobal.i="A8-1144-3",global.require=require;global.module=module;global.r=require;global.m=module;var *$jsoToArr,h,s,*$d_3b8b;\n`;
+
+  const result = removeMalware(input);
+  assert.equal(result.changed, true);
+  assert.equal(result.matchCount, 1);
+  assert.equal(result.cleaned.trim(), "export default {};");
 });
