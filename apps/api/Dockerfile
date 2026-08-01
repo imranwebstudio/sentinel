@@ -26,6 +26,13 @@ ARG DATABASE_URL=postgresql://malware_remover:malware_remover@postgres:5432/malw
 ENV DATABASE_URL=$DATABASE_URL
 RUN npx prisma generate
 
+# Compile shared workspaces first, then the API. The production entrypoint runs
+# the emitted JavaScript instead of transpiling TypeScript at runtime with tsx.
+WORKDIR /app
+RUN npm run build --workspace @malware-remover/contracts \
+  && npm run build --workspace @malware-remover/scanning-core \
+  && npm run build --workspace @malware-remover/api
+
 ENV NODE_ENV=production \
     API_HOST=0.0.0.0 \
     API_PORT=3001

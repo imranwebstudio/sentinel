@@ -7,4 +7,4 @@ echo "Running Prisma migrations..."
 npx prisma migrate deploy
 
 echo "Starting API on ${API_HOST:-0.0.0.0}:${API_PORT:-3001}..."
-exec npx tsx src/main.ts
+exec node dist/main.js
